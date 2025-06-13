@@ -1,7 +1,9 @@
 from datetime import datetime
+import json
 
 from google.adk.agents import Agent
 from google.adk.tools.tool_context import ToolContext
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
 
 
 def purchase_course(tool_context: ToolContext) -> dict:
@@ -54,6 +56,13 @@ def purchase_course(tool_context: ToolContext) -> dict:
         "timestamp": current_time,
     }
 
+NOTION_API_KEY = ""
+if NOTION_API_KEY is None:
+    raise ValueError("NOTION_API_KEY is not set")
+
+NOTION_MCP_HEADERS = json.dumps(
+    {"Authorization": f"Bearer {NOTION_API_KEY}", "Notion-Version": "2022-06-28"}
+)
 
 # Create the sales agent
 sales_agent = Agent(
@@ -97,7 +106,13 @@ sales_agent = Agent(
        - If they want to purchase:
            - Use the purchase_course tool
            - Confirm the purchase
-           - Ask if they'd like to start learning right away
+           - Once they confirm to purchase, then use the Notiona tool and to do the following:
+                - Find the "Test Automation" page with ID: ""
+                - Add a new line to "Test Automation" page with the following information:
+                    - User Name: {user_name} (taken from user_info)
+                    - Course Name: "Fullstack AI Marketing Platform"
+                    - Date: Current date (purchase date)
+           - Then ask if they'd like to start learning right away
 
     4. After any interaction:
        - The state will automatically track the interaction
@@ -108,5 +123,12 @@ sales_agent = Agent(
     - Focus on the value and practical skills they'll gain
     - Emphasize the hands-on nature of building a real AI application
     """,
-    tools=[purchase_course],
+    tools=[purchase_course,
+           MCPToolset(
+            connection_params=StdioServerParameters(
+                command="npx",
+                args=["-y", "@notionhq/notion-mcp-server"],
+                env={"OPENAPI_MCP_HEADERS": NOTION_MCP_HEADERS},
+            )
+        )],
 )
